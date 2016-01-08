@@ -10,15 +10,23 @@
 	'use strict';
 
 	var pluginName = 'lastfmNowPlaying';
+    var pluginUpdateFunctionName = 'lastfmUpdateNowPlaying';
+
+    // Div where the info should placed into
+    var lastfmContainerName = '#lastfmContainer';
+
+    // Set to true if Apple web service should be used to try to fetch an artwork if last.fm fails to provide one
+    var requestFallbackArtworkEnabled = true;
+
 	var defaults = {};
 
 	function Plugin( element, options ) {
 
 		this.element = element;
 		this.options = $.extend( {}, defaults, options) ;
-		this._defaults = defaults;
-		this._name = pluginName;
 		this.filteredResults = [];
+        this.resultingTrack = null;
+        this.lastTrack = null;
 		this.init();
 
 	}
@@ -105,14 +113,84 @@
 			self.filteredResults = self.filteredResults.sort( sortbyNewest );
 
 			// Return only the newest track
-			self.filteredResults = self.filteredResults[ self.filteredResults.length - 1 ];
+            self.resultingTrack = self.filteredResults[ self.filteredResults.length - 1 ];
 
-			// Render Template
-			self.renderTemplate( self.prepareTemplateData() );
+            function callRender() {
+                // Render Template
+                self.renderTemplate( self.prepareTemplateData() );
+                self.filteredResults = [];
+            }
 
+            if (self.resultingTrack) {
+                // Check if the same song is playing since the last check
+                var stillSameSong = true;
+                if (self.lastTrack) {
+                    // A song is considered as the same when title, artist and album match
+                    stillSameSong &= self.lastTrack.name == self.resultingTrack.name;
+                    stillSameSong &= self.lastTrack.artist['#text'] == self.resultingTrack.artist['#text'];
+                    stillSameSong &= self.lastTrack.album['#text'] == self.resultingTrack.album['#text'];
+                } else {
+                    stillSameSong = false;
+                }
+                self.lastTrack = self.resultingTrack;
+                // if still the same song is played, no need to render
+                if (stillSameSong) {
+                    return;
+                }
+                if (!requestFallbackArtworkEnabled
+                    || (self.resultingTrack.image[0]['#text'] &&
+                        self.resultingTrack.image[1]['#text'] &&
+                        self.resultingTrack.image[2]['#text'] &&
+                        self.resultingTrack.image[3]['#text'])) {
+                    // Render immediately if the artwork has been provided already or the fallback is disabled
+                    callRender();
+                } else {
+                    // Request artwork from fallback source
+                    // Try searching for title, artist and album
+                    var searchString = self.resultingTrack.name + " " + self.resultingTrack.artist['#text'] + " " + self.resultingTrack.album['#text'];
+                    self.requestFallbackArtwork(self, searchString, function(success) {
+                        if (success) {
+                            // Artwork has been found, render template
+                            callRender();
+                        } else {
+                            // No luck again, try one last time with title and artist (skipping album this time)
+                            var searchString = self.resultingTrack.name + " " + self.resultingTrack.artist['#text'];
+                            // No matter how this request turns out, render template afterwards anyway
+                            self.requestFallbackArtwork(self, searchString, callRender);
+                        }
+                    });
+                }
+            }
 		});
 
 	};
+
+    /**
+     * Request artwork for the current song separately from a fallback source.
+     * @param self Reference to this object.
+     * @param searchString (Unescaped) string which should be searched for.
+     * @param callback Block which should be called after web service call returns.
+     */
+    Plugin.prototype.requestFallbackArtwork = function ( self, searchString, callback ) {
+        $.ajax({
+            url: 'https://itunes.apple.com/search?media=music&term=' + encodeURI(searchString),
+            dataType: 'jsonp',
+            useDefaultXhrHeader: false
+        }).done( function( data ){
+            var success = false;
+            if (data.results.length > 0) {
+                // Only try to fetch the artwork if we actually got a result
+                var imageURL = data.results[0].artworkUrl100;
+                // iTunes API returns a URL for 100x100 pixels images, so we have to adopt the URL accordingly
+                self.resultingTrack.image[0]['#text'] = imageURL.replace('100x100', '34x34');
+                self.resultingTrack.image[1]['#text'] = imageURL.replace('100x100', '64x64');
+                self.resultingTrack.image[2]['#text'] = imageURL.replace('100x100', '126x126');
+                self.resultingTrack.image[3]['#text'] = imageURL.replace('100x100', '300x300');
+                success = true;
+            }
+            callback(success);
+        });
+    };
 
 	/**
 	 * Add Date Stamp
@@ -132,24 +210,21 @@
 	Plugin.prototype.prepareTemplateData = function () {
 		
 		var self = this;
-		var results = self.filteredResults;
+		var results = self.resultingTrack;
 
 		// Prepare Last.fm track data
-		var track = {
-			artist: results.artist['#text'],
-			album: results.album['#text'],
-			title: results.name,
-			image: {
-				small: results.image[0]['#text'],
-				medium: results.image[1]['#text'],
-				large: results.image[2]['#text'],
-				extralarge: results.image[3]['#text']
-			},
-			url: results.url
-		};
-
-		return track;
-
+		return {
+            artist: results.artist['#text'],
+            album: results.album['#text'],
+            title: results.name,
+            image: {
+                small: results.image[0]['#text'],
+                medium: results.image[1]['#text'],
+                large: results.image[2]['#text'],
+                extralarge: results.image[3]['#text']
+            },
+            url: results.url
+        };
 	};
 
 	/**
@@ -165,7 +240,8 @@
 		var property;
 
 		// Render template to HTML
-		var template = $(self.element).html();
+        var htmlContainer = $(lastfmContainerName);
+        var template = $(self.element).html();
 
 		// Iterate for properties in track
 		for ( property in track ) {
@@ -199,7 +275,7 @@
 		}
 
 		// Add template to DOM
-		$( self.element ).after( template );
+        htmlContainer.html( template );
 
 		// Clean template
 		self.cleanTemplate();
@@ -212,15 +288,17 @@
 
 	Plugin.prototype.cleanTemplate = function () {
 
-		var self = this;
-		var images = $( self.element ).next().find('img');
+		var images = $(lastfmContainerName).find('img');
 
 		images.each( function () {
 
 			var imageURL = $(this).attr('src');
 
 			if ( !imageURL.length ) {
-				$(this).remove();
+                // the Kudos for this default pic goes to XideXL from RootzWiki (http://rootzwiki.com/topic/20106-icon-default-album-artwork/)
+				$(this).attr('src', 'images/default_album_art.jpg');
+                $(this).attr('width', '300');
+                $(this).attr('height', '300');
 			}
 
 		});
@@ -238,5 +316,19 @@
 		});
 
 	};
+
+    $.fn[ pluginUpdateFunctionName ] = function () {
+
+        return this.each( function () {
+
+            var plugin = $.data(this, 'plugin_' + pluginName);
+            if (plugin) {
+                plugin.getData();
+                plugin.sortData();
+            }
+
+        });
+
+    };
 
 })( jQuery, window, document );

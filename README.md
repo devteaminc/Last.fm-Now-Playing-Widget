@@ -43,3 +43,18 @@ The plugin requires [jQuery](http://jquery.com/download/), we recommend using th
   });
   ```
   Be sure to update the apiKey and members options with your own information.
+  
+4. **Place view**
+
+Add a container with ```lastfmContainer``` id where the the template should be rendered into:
+
+	<div id="lastfmContainer"></div>
+
+5. _Optional:_ **Auto-update**
+
+If you want the song to get updated automatically without the need of a page reload, use ```lastfmUpdateNowPlaying()``` and call it periodically, e.g.:
+
+    (function worker() {
+        $('#lastFmWidget').lastfmUpdateNowPlaying();
+        setTimeout(worker, 5000);
+    })(); 
