@@ -48,16 +48,16 @@ The plugin requires [jQuery](http://jquery.com/download/), we recommend using th
   
   ```javascript
   function loadPlaying() {
-   $('#lastFmWidget').lastfmNowPlaying({
-    apiKey: 'YOUR-API-KEY',
-    members: ['YOUR-LASTFM-USERNAME']
-   });
+  	$('#lastFmWidget').lastfmNowPlaying({
+  		apiKey: 'YOUR-API-KEY',
+  		members: ['YOUR-LASTFM-USERNAME']
+  	});
   }
   
   jQuery(document).ready(function () {
-   loadPlaying(); // on page load
-   setInterval(function(){
-    loadPlaying(); // updated every 5 seconds
-   }, 5000);
+  	loadPlaying(); // on page load
+  	setInterval(function(){
+  		loadPlaying(); // updated every 5 seconds
+  	}, 5000);
   });
   ```
