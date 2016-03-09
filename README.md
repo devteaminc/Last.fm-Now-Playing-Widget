@@ -45,3 +45,19 @@ The plugin requires [jQuery](http://jquery.com/download/), we recommend using th
   Be sure to update the apiKey and members options with your own information.
   
   The widget is not automaticly up-to-date with new tracks. Update must be triggered from the main JavaScript with a timer as `setInterval`.  
+  
+  ```javascript
+  function loadPlaying() {
+   $('#lastFmWidget').lastfmNowPlaying({
+    apiKey: 'YOUR-API-KEY',
+    members: ['YOUR-LASTFM-USERNAME']
+   });
+  }
+  
+  jQuery(document).ready(function () {
+   loadPlaying(); // on page load
+   setInterval(function(){
+    loadPlaying(); // updated every 5 seconds
+   }, 5000);
+  });
+  ```
