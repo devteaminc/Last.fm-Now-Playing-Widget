@@ -47,8 +47,8 @@
 			var username = this;
 
 			$.ajax({
-				url: 'http://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user=' + username + '&limit=1&nowplaying=true&api_key=' + self.options.apiKey + '&format=jsonp',
 				dataType: 'jsonp'
+				url: 'http://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user=' + username + '&limit=1&nowplaying=true&api_key=' + self.options.apiKey + '&format=jsonp',
 				// changed to jsonp to proxy through API
 			}).done( function( data ){
 
